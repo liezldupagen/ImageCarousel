@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Image Carousel</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #000;
+            overflow: hidden;
+        }
+
+        .carousel-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .carousel {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .carousel-track {
+            display: flex;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.8s ease-in-out;
+        }
+
+        .carousel-slide {
+            min-width: 100%;
+            height: 100%;
+            flex-shrink: 0;
+        }
+
+        .carousel-slide img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .carousel-controls {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 30px;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .carousel-btn {
+            pointer-events: all;
+            background: rgba(255, 255, 255, 0.3);
+            border: none;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 24px;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .carousel-btn:hover {
+            background: rgba(255, 255, 255, 0.5);
+            transform: scale(1.1);
+        }
+
+        .carousel-dots {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            z-index: 10;
+        }
+
+        .dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.5);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .dot.active {
+            background: white;
+            transform: scale(1.2);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .carousel-counter {
+            position: absolute;
+            top: 30px;
+            right: 30px;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 20px;
+            border-radius: 25px;
+            backdrop-filter: blur(10px);
+            z-index: 10;
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 24px;
+            text-align: center;
+        }
+
+        @media (max-width: 600px) {
+            .carousel-btn {
+                width: 45px;
+                height: 45px;
+                font-size: 18px;
+            }
+            
+            .carousel-controls {
+                padding: 0 15px;
+            }
+
+            .carousel-counter {
+                top: 15px;
+                right: 15px;
+                font-size: 14px;
+                padding: 8px 15px;
+            }
+
+            .carousel-dots {
+                bottom: 15px;
+                gap: 8px;
+            }
+
+            .dot {
+                width: 10px;
+                height: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="carousel-container">
+        <div class="loading" id="loading">Loading images...</div>
+        <div class="carousel" id="carousel" style="display: none;">
+            <div class="carousel-track" id="carouselTrack"></div>
+            
+            <div class="carousel-controls">
+                <button class="carousel-btn" id="prevBtn">&#10094;</button>
+                <button class="carousel-btn" id="nextBtn">&#10095;</button>
+            </div>
+        </div>
+        
+        <div class="carousel-dots" id="dotsContainer"></div>
+        <div class="carousel-counter" id="counter"></div>
+    </div>
+
+    <script>
+        // CONFIGURATION: Add all your Google Drive image IDs here
+        const imageIds = [
+            '1akqXV2BEljMVMwo_xL-odIMQ9smKEL7r',
+            '1N-3IjhPUTXoJz3pOhIwko5DuDLlMh-_5',
+            '1Sdme_2oyCn1S5sCJXPQFbnzV_jgFMlxR',
+            '1REZTc2V3ZFcvpvBh-CSrT70loeNgqrNy',
+            '1dX6CZerGK6PpTCt1ylVB_AaELOHb4Hrq'
+            // Add more image IDs here as needed
+        ];
+
+        const track = document.getElementById('carouselTrack');
+        const dotsContainer = document.getElementById('dotsContainer');
+        const counter = document.getElementById('counter');
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const loading = document.getElementById('loading');
+        const carousel = document.getElementById('carousel');
+        
+        let currentSlide = 0;
+        let totalSlides = 0;
+        let autoPlay;
+
+        // Build carousel from image IDs
+        function buildCarousel() {
+            if (imageIds.length === 0) {
+                loading.textContent = 'No images found. Please add image IDs to the configuration.';
+                return;
+            }
+
+            totalSlides = imageIds.length;
+
+            // Create slides
+            imageIds.forEach((id, index) => {
+                const slide = document.createElement('div');
+                slide.className = 'carousel-slide';
+                
+                const img = document.createElement('img');
+                img.src = `https://drive.google.com/uc?export=view&id=${id}`;
+                img.alt = `Image ${index + 1}`;
+                img.onerror = () => {
+                    console.error(`Failed to load image: ${id}`);
+                    img.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="800" height="600"%3E%3Crect fill="%23333" width="800" height="600"/%3E%3Ctext fill="white" x="50%25" y="50%25" text-anchor="middle" dominant-baseline="middle" font-family="Arial" font-size="24"%3EImage not available%3C/text%3E%3C/svg%3E';
+                };
+                
+                slide.appendChild(img);
+                track.appendChild(slide);
+
+                // Create dot
+                const dot = document.createElement('div');
+                dot.className = 'dot';
+                if (index === 0) dot.classList.add('active');
+                dot.addEventListener('click', () => goToSlide(index));
+                dotsContainer.appendChild(dot);
+            });
+
+            // Show carousel
+            loading.style.display = 'none';
+            carousel.style.display = 'block';
+
+            // Initialize
+            updateCarousel();
+            startAutoPlay();
+        }
+
+        function updateCarousel() {
+            const slides = document.querySelectorAll('.carousel-slide');
+            const dots = document.querySelectorAll('.dot');
+
+            // Move the track
+            track.style.transform = `translateX(-${currentSlide * 100}%)`;
+            
+            // Update dots
+            dots.forEach((dot, index) => {
+                dot.classList.toggle('active', index === currentSlide);
+            });
+            
+            // Update counter
+            counter.textContent = `${currentSlide + 1} / ${totalSlides}`;
+        }
+
+        function nextSlide() {
+            currentSlide = (currentSlide + 1) % totalSlides;
+            updateCarousel();
+        }
+
+        function prevSlide() {
+            currentSlide = (currentSlide - 1 + totalSlides) % totalSlides;
+            updateCarousel();
+        }
+
+        function goToSlide(index) {
+            currentSlide = index;
+            updateCarousel();
+        }
+
+        function startAutoPlay() {
+            autoPlay = setInterval(nextSlide, 3000);
+        }
+
+        function stopAutoPlay() {
+            clearInterval(autoPlay);
+        }
+
+        // Event listeners
+        nextBtn.addEventListener('click', () => {
+            nextSlide();
+            stopAutoPlay();
+            startAutoPlay();
+        });
+
+        prevBtn.addEventListener('click', () => {
+            prevSlide();
+            stopAutoPlay();
+            startAutoPlay();
+        });
+
+        // Pause auto-advance on hover
+        carousel.addEventListener('mouseenter', stopAutoPlay);
+        carousel.addEventListener('mouseleave', startAutoPlay);
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') {
+                prevSlide();
+                stopAutoPlay();
+                startAutoPlay();
+            }
+            if (e.key === 'ArrowRight') {
+                nextSlide();
+                stopAutoPlay();
+                startAutoPlay();
+            }
+        });
+
+        // Initialize carousel
+        buildCarousel();
+    </script>
+</body>
+</html>
